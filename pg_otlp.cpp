@@ -62,13 +62,14 @@ Datum
 pg_otlp(PG_FUNCTION_ARGS)
 {
 	char *endpoint = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	char *spanname =  text_to_cstring(PG_GETARG_TEXT_PP(1));
 	elog(NOTICE, "Endpoint: %s", endpoint);
 
 	opts.endpoint = endpoint;
 
 	InitTracer();
 
-	auto scoped_span = trace::Scope(get_tracer()->StartSpan("library"));
+	auto scoped_span = trace::Scope(get_tracer()->StartSpan(spanname));
 
 	PG_RETURN_NULL();
 }

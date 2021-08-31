@@ -70,5 +70,5 @@ For now we have just one function named `pg_otlp` that send a trace to OpenTelem
 
 ```sql
 CREATE EXTENSION pg_otlp;
-SELECT pg_otlp('localhost:4317');
+SELECT pg_otlp('localhost:4317', 'teste');
 ```
