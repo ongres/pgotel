@@ -14,7 +14,6 @@
 #include "opentelemetry/exporters/otlp/otlp_grpc_exporter.h"
 #include "opentelemetry/sdk/trace/simple_processor.h"
 #include "opentelemetry/sdk/trace/tracer_provider.h"
-#include "opentelemetry/sdk/logs/simple_log_processor.h"
 #include "opentelemetry/trace/provider.h"
 
 namespace trace    = opentelemetry::trace;
