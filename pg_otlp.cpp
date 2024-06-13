@@ -10,13 +10,13 @@
  *
  *-------------------------------------------------------------------------
  */
-
-#include "opentelemetry/exporters/otlp/otlp_grpc_exporter_factory.h"
-#include "opentelemetry/exporters/otlp/otlp_grpc_log_record_exporter_factory.h"
+#include "opentelemetry/exporters/otlp/otlp_http_exporter_factory.h"
+#include "opentelemetry/exporters/otlp/otlp_http_log_record_exporter_factory.h"
+#include "opentelemetry/exporters/otlp/otlp_http_log_record_exporter_options.h"
 #include "opentelemetry/logs/provider.h"
-#include "opentelemetry/sdk/logs/logger_context_factory.h"
+#include "opentelemetry/sdk/common/global_log_handler.h"
 #include "opentelemetry/sdk/logs/logger_provider_factory.h"
-#include "opentelemetry/sdk/logs/logger.h"
+#include "opentelemetry/sdk/logs/processor.h"
 #include "opentelemetry/sdk/logs/simple_log_record_processor_factory.h"
 
 #define LOGGER_NAME "pg_otlp_logger"
@@ -32,20 +32,17 @@ namespace logs_sdk  = opentelemetry::sdk::logs;
 // good example: https://github.com/open-telemetry/opentelemetry-cpp-contrib/blob/main/exporters/fluentd/example/log/main.cc
 namespace pg_otlp
 {
-	opentelemetry::exporter::otlp::OtlpGrpcLogRecordExporterOptions options;
+	opentelemetry::exporter::otlp::OtlpHttpLogRecordExporterOptions options;
 	nostd::shared_ptr<logs::Logger> _logger;
 
 	void InitLogger()
 	{
-		auto exporter  = otlp::OtlpGrpcLogRecordExporterFactory::Create(options);
+		auto exporter  = otlp::OtlpHttpLogRecordExporterFactory::Create(options);
 		auto processor = logs_sdk::SimpleLogRecordProcessorFactory::Create(std::move(exporter));
 	
-		std::vector<std::unique_ptr<logs_sdk::LogRecordProcessor>> processors;
-		processors.push_back(std::move(processor));
-	
-		auto context = logs_sdk::LoggerContextFactory::Create(std::move(processors));
-		std::shared_ptr<logs::LoggerProvider> provider = logs_sdk::LoggerProviderFactory::Create(std::move(context));
-	
+		std::shared_ptr<logs::LoggerProvider> provider =
+      		logs_sdk::LoggerProviderFactory::Create(std::move(processor));
+
 		opentelemetry::logs::Provider::SetLoggerProvider(provider);
 
 		_logger = provider->GetLogger(LOGGER_NAME, LOGGER_LIBRARY_NAME, LOGGER_LIBRARY_VERSION);
@@ -53,9 +50,9 @@ namespace pg_otlp
 
 	void Log(nostd::string_view message)
 	{
-		// auto provider = logs::Provider::GetLoggerProvider();
-		// auto logger = provider->GetLogger("pg_otlp_logger", "pg_otlp", OPENTELEMETRY_SDK_VERSION);
-		_logger->Debug(message);
+		_logger->Log(logs::Severity::kInfo, message);
+
+		_logger->Enabled
 	}
 
 }  // namespace
@@ -100,12 +97,10 @@ send_log_to_otel_collector(ErrorData *edata)
 Datum
 pg_otlp_log(PG_FUNCTION_ARGS)
 {
-	char *endpoint = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	char *url = text_to_cstring(PG_GETARG_TEXT_PP(0));
 	char *message = text_to_cstring(PG_GETARG_TEXT_PP(1));
-	elog(NOTICE, "Endpoint: %s", endpoint);
-	elog(NOTICE, "Message: %s", message);
 
-	pg_otlp::options.endpoint = endpoint;
+	pg_otlp::options.url = url;
 	pg_otlp::Log(message);
 
 	PG_RETURN_NULL();
@@ -132,14 +127,12 @@ void
 _PG_init(void)
 {
 	load_params();
-	pg_otlp::options.endpoint = "localhost:4317";
+	pg_otlp::options.url = "localhost:4318";
 
 	pg_otlp::InitLogger();
 
 	prev_log_hook = emit_log_hook;
 	emit_log_hook = send_log_to_otel_collector;
-
-	// on_proc_exit(cleanup, 0);
 }
 
 /*
@@ -150,7 +143,6 @@ void
 _PG_fini(void)
 {
 	emit_log_hook = prev_log_hook;
-	// cleanup(0, 0);
 }
 
 /* declaration out of file scope */

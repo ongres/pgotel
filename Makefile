@@ -11,7 +11,7 @@ SHLIB_LINK := $(LDFLAGS) \
 	-lopentelemetry_logs \
 	-lopentelemetry_otlp_recordable \
 	-lopentelemetry_resources \
-	-lopentelemetry_exporter_otlp_grpc_log
+	-lopentelemetry_exporter_otlp_http_log
 
 PG_CPPFLAGS = -I/usr/local/include
 
