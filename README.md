@@ -78,9 +78,9 @@ cd opentelemetry-cpp
 
 ## Test extension
 
-For now we have just one function named `pg_otlp` that send a trace to OpenTelemetry collector.
+For now we have just one function named `pgotel` that send a trace to OpenTelemetry collector.
 
 ```sql
-CREATE EXTENSION pg_otlp;
-SELECT pg_otlp_log('localhost:4317', 'teste');
+CREATE EXTENSION pgotel;
+SELECT pgotel_log('localhost:4317', 'teste');
 ```

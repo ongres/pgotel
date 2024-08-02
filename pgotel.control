@@ -1,5 +1,5 @@
-# pg_otlp C++ extension
+# pgotel C++ extension
 comment = 'POC to interact with OpenTelemetry'
 default_version = '1.0'
-module_pathname = '$libdir/pg_otlp'
+module_pathname = '$libdir/pgotel'
 relocatable = true
