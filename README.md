@@ -82,5 +82,5 @@ For now we have just one function named `pgotel` that send a trace to OpenTeleme
 
 ```sql
 CREATE EXTENSION pgotel;
-SELECT pgotel_log('localhost:4317', 'teste');
+SELECT pgotel_counter('localhost:4317', 'counter_name', 10);
 ```
