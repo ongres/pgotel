@@ -8,10 +8,9 @@ PGFILEDESC = "pgotel - POC to interact with OpenTelemetry"
 
 SHLIB_LINK := $(LDFLAGS) \
 	-lopentelemetry_common \
-	-lopentelemetry_logs \
 	-lopentelemetry_otlp_recordable \
-	-lopentelemetry_resources \
-	-lopentelemetry_exporter_otlp_grpc_log
+	-lopentelemetry_metrics \
+	-lopentelemetry_exporter_otlp_grpc_metrics
 
 PG_CPPFLAGS = -I/usr/local/include
 

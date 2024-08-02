@@ -11,51 +11,68 @@
  *-------------------------------------------------------------------------
  */
 
-#include "opentelemetry/exporters/otlp/otlp_grpc_exporter_factory.h"
-#include "opentelemetry/exporters/otlp/otlp_grpc_log_record_exporter_factory.h"
-#include "opentelemetry/logs/provider.h"
-#include "opentelemetry/sdk/logs/logger_context_factory.h"
-#include "opentelemetry/sdk/logs/logger_provider_factory.h"
-#include "opentelemetry/sdk/logs/logger.h"
-#include "opentelemetry/sdk/logs/simple_log_record_processor_factory.h"
+#include "opentelemetry/exporters/otlp/otlp_grpc_metric_exporter_factory.h"
+#include "opentelemetry/metrics/meter.h"
+#include "opentelemetry/metrics/meter_provider.h"
+#include "opentelemetry/metrics/provider.h"
 
-#define LOGGER_NAME "pgotel_logger"
-#define LOGGER_LIBRARY_NAME "pgotel_logger"
-#define LOGGER_LIBRARY_VERSION "1.0"
+#include "opentelemetry/sdk/metrics/export/periodic_exporting_metric_reader.h"
+#include "opentelemetry/sdk/metrics/export/periodic_exporting_metric_reader_factory.h"
+#include "opentelemetry/sdk/metrics/meter.h"
+#include "opentelemetry/sdk/metrics/meter_context_factory.h"
+#include "opentelemetry/sdk/metrics/meter_provider.h"
+#include "opentelemetry/sdk/metrics/meter_provider_factory.h"
+
+#include "opentelemetry/sdk/metrics/push_metric_exporter.h"
 
 using namespace std;
-namespace nostd     = opentelemetry::nostd;
-namespace otlp      = opentelemetry::exporter::otlp;
-namespace logs      = opentelemetry::logs;
-namespace logs_sdk  = opentelemetry::sdk::logs;
 
-// good example: https://github.com/open-telemetry/opentelemetry-cpp-contrib/blob/main/exporters/fluentd/example/log/main.cc
+namespace metric_sdk    = opentelemetry::sdk::metrics;
+namespace common        = opentelemetry::common;
+namespace metrics_api   = opentelemetry::metrics;
+namespace otlp_exporter = opentelemetry::exporter::otlp;
+
 namespace pgotel
 {
-	opentelemetry::exporter::otlp::OtlpGrpcLogRecordExporterOptions options;
-	nostd::shared_ptr<logs::Logger> _logger;
+	otlp_exporter::OtlpGrpcMetricExporterOptions options;
 
-	void InitLogger()
+	void InitMetrics()
 	{
-		auto exporter  = otlp::OtlpGrpcLogRecordExporterFactory::Create(options);
-		auto processor = logs_sdk::SimpleLogRecordProcessorFactory::Create(std::move(exporter));
-	
-		std::vector<std::unique_ptr<logs_sdk::LogRecordProcessor>> processors;
-		processors.push_back(std::move(processor));
-	
-		auto context = logs_sdk::LoggerContextFactory::Create(std::move(processors));
-		std::shared_ptr<logs::LoggerProvider> provider = logs_sdk::LoggerProviderFactory::Create(std::move(context));
-	
-		opentelemetry::logs::Provider::SetLoggerProvider(provider);
+		auto exporter = otlp_exporter::OtlpGrpcMetricExporterFactory::Create(options);
 
-		_logger = provider->GetLogger(LOGGER_NAME, LOGGER_LIBRARY_NAME, LOGGER_LIBRARY_VERSION);
+		std::string version{"1.2.0"};
+		std::string schema{"https://opentelemetry.io/schemas/1.2.0"};
+
+		// Initialize and set the global MeterProvider
+		metric_sdk::PeriodicExportingMetricReaderOptions reader_options;
+		reader_options.export_interval_millis = std::chrono::milliseconds(2000);
+		reader_options.export_timeout_millis  = std::chrono::milliseconds(500);
+
+		auto reader =
+			metric_sdk::PeriodicExportingMetricReaderFactory::Create(std::move(exporter), reader_options);
+
+		auto context = metric_sdk::MeterContextFactory::Create();
+		context->AddMetricReader(std::move(reader));
+
+		auto u_provider = metric_sdk::MeterProviderFactory::Create(std::move(context));
+		std::shared_ptr<opentelemetry::metrics::MeterProvider> provider(std::move(u_provider));
+
+		metrics_api::Provider::SetMeterProvider(provider);
 	}
 
-	void Log(nostd::string_view message)
+	void CleanupMetrics()
 	{
-		// auto provider = logs::Provider::GetLoggerProvider();
-		// auto logger = provider->GetLogger("pgotel_logger", "pgotel", OPENTELEMETRY_SDK_VERSION);
-		_logger->Debug(message);
+		std::shared_ptr<metrics_api::MeterProvider> none;
+		metrics_api::Provider::SetMeterProvider(none);
+	}
+
+	void counter(const std::string &name, double value)
+	{
+		std::string counter_name = name + "_counter";
+		auto provider            = metrics_api::Provider::GetMeterProvider();
+		opentelemetry::nostd::shared_ptr<metrics_api::Meter> meter = provider->GetMeter(name, "1.2.0");
+		auto double_counter = meter->CreateDoubleCounter(counter_name);
+		double_counter->Add(value);
 	}
 
 }  // namespace
@@ -73,40 +90,25 @@ extern "C" {
 
 PG_MODULE_MAGIC;
 
-PG_FUNCTION_INFO_V1(pgotel_log);
+PG_FUNCTION_INFO_V1(pgotel_counter);
 
 void _PG_init(void);
-void _PG_fini(void);
-
-/* Hold previous logging hook */
-static emit_log_hook_type prev_log_hook = NULL;
 
 /* GUC variables */ 
 static bool pgotel_enabled = false;
 
-/*
- * send_log_to_otel_collector
- * offloading postgres logs to OTEL-Collector
- */
-static void
-send_log_to_otel_collector(ErrorData *edata)
-{
-	if (!pgotel_enabled)
-		return;
-
-	pgotel::Log(edata->message);
-}
-
 Datum
-pgotel_log(PG_FUNCTION_ARGS)
+pgotel_counter(PG_FUNCTION_ARGS)
 {
 	char *endpoint = text_to_cstring(PG_GETARG_TEXT_PP(0));
-	char *message = text_to_cstring(PG_GETARG_TEXT_PP(1));
-	elog(NOTICE, "Endpoint: %s", endpoint);
-	elog(NOTICE, "Message: %s", message);
+	char *counter_name = text_to_cstring(PG_GETARG_TEXT_PP(1));
+	float8 value = PG_GETARG_FLOAT8(2);
+	elog(DEBUG1, "Endpoint: %s", endpoint);
+	elog(DEBUG1, "Counter name: %s", counter_name);
+	elog(DEBUG1, "Value: %f", value);
 
 	pgotel::options.endpoint = endpoint;
-	pgotel::Log(message);
+	pgotel::counter(counter_name, value);
 
 	PG_RETURN_NULL();
 }
@@ -132,14 +134,7 @@ void
 _PG_init(void)
 {
 	load_params();
-	pgotel::options.endpoint = "localhost:4317";
-
-	pgotel::InitLogger();
-
-	prev_log_hook = emit_log_hook;
-	emit_log_hook = send_log_to_otel_collector;
-
-	// on_proc_exit(cleanup, 0);
+	pgotel::InitMetrics();
 }
 
 /*
@@ -149,8 +144,7 @@ _PG_init(void)
 void
 _PG_fini(void)
 {
-	emit_log_hook = prev_log_hook;
-	// cleanup(0, 0);
+	pgotel::CleanupMetrics();
 }
 
 /* declaration out of file scope */
