@@ -1,10 +1,10 @@
-MODULE_big = pg_otlp
+MODULE_big = pgotel
 
-EXTENSION = pg_otlp
+EXTENSION = pgotel
 
-DATA = pg_otlp--1.0.sql
-OBJS = pg_otlp.o
-PGFILEDESC = "pg_otlp - Minimal extension template in C++"
+DATA = pgotel--1.0.sql
+OBJS = pgotel.o
+PGFILEDESC = "pgotel - POC to interact with OpenTelemetry"
 
 SHLIB_LINK := $(LDFLAGS) \
 	-lopentelemetry_common \
