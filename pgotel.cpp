@@ -24,9 +24,9 @@
 
 using namespace std;
 
-namespace metric_sdk    = opentelemetry::sdk::metrics;
-namespace common        = opentelemetry::common;
-namespace metrics_api   = opentelemetry::metrics;
+namespace metric_sdk = opentelemetry::sdk::metrics;
+namespace common = opentelemetry::common;
+namespace metrics_api = opentelemetry::metrics;
 namespace otlp_exporter = opentelemetry::exporter::otlp;
 
 namespace pgotel
@@ -34,21 +34,23 @@ namespace pgotel
 	otlp_exporter::OtlpGrpcMetricExporterOptions options;
 	std::unique_ptr<metric_sdk::MetricReader> reader;
 
-	void InitMetrics(std::string endpoint, std::chrono::milliseconds interval, std::chrono::milliseconds timeout)
+	void
+	InitMetrics(std::string endpoint, std::chrono::milliseconds interval,
+				std::chrono::milliseconds timeout)
 	{
 		pgotel::options.endpoint = endpoint;
 		auto exporter = otlp_exporter::OtlpGrpcMetricExporterFactory::Create(options);
 
-		std::string version{"1.2.0"};
-		std::string schema{"https://opentelemetry.io/schemas/1.2.0"};
+		std::string version{ "1.2.0" };
+		std::string schema{ "https://opentelemetry.io/schemas/1.2.0" };
 
 		// Initialize and set the global MeterProvider
 		metric_sdk::PeriodicExportingMetricReaderOptions reader_options;
 		reader_options.export_interval_millis = std::chrono::milliseconds(interval);
-		reader_options.export_timeout_millis  = std::chrono::milliseconds(timeout);
+		reader_options.export_timeout_millis = std::chrono::milliseconds(timeout);
 
-		reader =
-			metric_sdk::PeriodicExportingMetricReaderFactory::Create(std::move(exporter), reader_options);
+		reader = metric_sdk::PeriodicExportingMetricReaderFactory::Create(std::move(exporter),
+																		  reader_options);
 
 		auto context = metric_sdk::MeterContextFactory::Create();
 		context->AddMetricReader(std::move(reader));
@@ -59,32 +61,37 @@ namespace pgotel
 		metrics_api::Provider::SetMeterProvider(provider);
 	}
 
-	void CleanupMetrics()
+	void
+	CleanupMetrics()
 	{
 		std::shared_ptr<metrics_api::MeterProvider> none;
 		metrics_api::Provider::SetMeterProvider(none);
 	}
 
-	void RestartMetrics(std::string endpoint, std::chrono::milliseconds interval, std::chrono::milliseconds timeout)
+	void
+	RestartMetrics(std::string endpoint, std::chrono::milliseconds interval,
+				   std::chrono::milliseconds timeout)
 	{
 		CleanupMetrics();
 		InitMetrics(endpoint, interval, timeout);
 	}
 
-	void counter(const std::string &name, double value)
+	void
+	counter(const std::string &name, double value)
 	{
 		std::string counter_name = "counter." + name;
-		auto provider            = metrics_api::Provider::GetMeterProvider();
-		opentelemetry::nostd::shared_ptr<metrics_api::Meter> meter = provider->GetMeter(name, "1.2.0");
+		auto provider = metrics_api::Provider::GetMeterProvider();
+		opentelemetry::nostd::shared_ptr<metrics_api::Meter> meter =
+			provider->GetMeter(name, "1.2.0");
 		auto double_counter = meter->CreateDoubleCounter(counter_name);
 		double_counter->Add(value);
 	}
 
-}  // namespace
-
+} // namespace pgotel
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 #include "postgres.h"
 #include "fmgr.h"
@@ -99,7 +106,7 @@ PG_FUNCTION_INFO_V1(pgotel_counter);
 
 void _PG_init(void);
 
-/* GUC variables */ 
+/* GUC variables */
 static bool pgotel_enabled = false;
 static int pgotel_interval = 2000;
 static int pgotel_timeout = 500;
@@ -126,7 +133,9 @@ pgotel_assign_interval_guc(int newval, void *extra)
 	elog(DEBUG1, "pgotel_interval: %d", newval);
 	elog(DEBUG1, "pgotel_timeout: %d", pgotel_timeout);
 
-	pgotel::RestartMetrics(pgotel_endpoint, std::chrono::milliseconds(newval), std::chrono::milliseconds(pgotel_timeout));
+	pgotel::RestartMetrics(pgotel_endpoint,
+						   std::chrono::milliseconds(newval),
+						   std::chrono::milliseconds(pgotel_timeout));
 }
 
 static void
@@ -135,46 +144,62 @@ pgotel_assign_timeout_guc(int newval, void *extra)
 	elog(DEBUG1, "pgotel_interval: %d", pgotel_interval);
 	elog(DEBUG1, "pgotel_timeout: %d", newval);
 
-	pgotel::RestartMetrics(pgotel_endpoint, std::chrono::milliseconds(pgotel_interval), std::chrono::milliseconds(newval));
+	pgotel::RestartMetrics(pgotel_endpoint,
+						   std::chrono::milliseconds(pgotel_interval),
+						   std::chrono::milliseconds(newval));
 }
 
 static void
 load_params(void)
 {
 	DefineCustomStringVariable("pgotel.endpoint",
-							"Endpoint of the OTEL-Collector",
-							NULL,
-							&pgotel_endpoint,
-							"localhost:4317",
-							PGC_USERSET,
-							0, NULL, NULL, NULL);
+							   "Endpoint of the OTEL-Collector",
+							   NULL,
+							   &pgotel_endpoint,
+							   "localhost:4317",
+							   PGC_USERSET,
+							   0,
+							   NULL,
+							   NULL,
+							   NULL);
 
 	/* Enable/Disable */
 	DefineCustomBoolVariable("pgotel.enabled",
 							 "Enable/Disable Send Logs to OTEL-Collector",
-							NULL,
-							&pgotel_enabled,
-							false,
-							PGC_SIGHUP,
-							0, NULL, NULL, NULL);
+							 NULL,
+							 &pgotel_enabled,
+							 false,
+							 PGC_SIGHUP,
+							 0,
+							 NULL,
+							 NULL,
+							 NULL);
 
 	DefineCustomIntVariable("pgotel.interval",
 							"Interval to send metrics to OTEL-Collector",
 							NULL,
 							&pgotel_interval,
 							2000,
-							1000, INT_MAX,
+							1000,
+							INT_MAX,
 							PGC_USERSET,
-							0, NULL, pgotel_assign_interval_guc, NULL);
+							0,
+							NULL,
+							pgotel_assign_interval_guc,
+							NULL);
 
 	DefineCustomIntVariable("pgotel.timeout",
 							"Timeout to send metrics to OTEL-Collector",
 							NULL,
 							&pgotel_timeout,
 							500,
-							100, INT_MAX,
+							100,
+							INT_MAX,
 							PGC_USERSET,
-							0, NULL, pgotel_assign_timeout_guc, NULL);
+							0,
+							NULL,
+							pgotel_assign_timeout_guc,
+							NULL);
 }
 
 /*
@@ -186,7 +211,9 @@ _PG_init(void)
 {
 	load_params();
 	elog(DEBUG1, "endpoint: %s", pgotel_endpoint);
-	pgotel::InitMetrics(pgotel_endpoint, std::chrono::milliseconds(pgotel_interval), std::chrono::milliseconds(pgotel_timeout));
+	pgotel::InitMetrics(pgotel_endpoint,
+						std::chrono::milliseconds(pgotel_interval),
+						std::chrono::milliseconds(pgotel_timeout));
 }
 
 /*
