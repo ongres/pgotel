@@ -77,14 +77,15 @@ namespace pgotel
 	}
 
 	void
-	counter(const std::string &name, double value)
+	counter(const std::string &name, double value, std::map<std::string, std::string> labels)
 	{
 		std::string counter_name = "counter." + name;
 		auto provider = metrics_api::Provider::GetMeterProvider();
 		opentelemetry::nostd::shared_ptr<metrics_api::Meter> meter =
 			provider->GetMeter(name, "1.2.0");
 		auto double_counter = meter->CreateDoubleCounter(counter_name);
-		double_counter->Add(value);
+		auto labelkv = common::KeyValueIterableView<decltype(labels)>{ labels };
+		double_counter->Add(value, labelkv);
 	}
 
 } // namespace pgotel
@@ -98,6 +99,7 @@ extern "C"
 #include "miscadmin.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
+#include "utils/jsonb.h"
 #include "storage/ipc.h"
 
 PG_MODULE_MAGIC;
@@ -115,14 +117,43 @@ static char *pgotel_endpoint = NULL;
 Datum
 pgotel_counter(PG_FUNCTION_ARGS)
 {
-	char *counter_name = text_to_cstring(PG_GETARG_TEXT_PP(0));
-	float8 value = PG_GETARG_FLOAT8(1);
+	char *counter_name = PG_ARGISNULL(0) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(0));
+	float8 value = PG_ARGISNULL(0) ? -1 : PG_GETARG_FLOAT8(1);
+	Jsonb *labels = PG_ARGISNULL(2) ? NULL : PG_GETARG_JSONB_P(2);
+	std::map<std::string, std::string> labels_map;
 
-	elog(DEBUG1, "Endpoint: %s", pgotel_endpoint);
-	elog(DEBUG1, "Counter name: %s", counter_name);
-	elog(DEBUG1, "Value: %f", value);
+	if (!counter_name)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("counter name cannot be NULL")));
 
-	pgotel::counter(counter_name, value);
+	if (value < 0)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("counter value cannot be negative")));
+
+	/* iterate over the labels JSONB to include key/values to the C++ map data structure */
+	if (labels != NULL)
+	{
+		JsonbIterator *it = JsonbIteratorInit(&labels->root);
+		JsonbValue v;
+		JsonbIteratorToken type;
+		while ((type = JsonbIteratorNext(&it, &v, true)) != WJB_DONE)
+		{
+			if (type == WJB_KEY)
+			{
+				char *key = pnstrdup(v.val.string.val, v.val.string.len);
+				type = JsonbIteratorNext(&it, &v, true);
+				if (type == WJB_VALUE)
+				{
+					char *val = pnstrdup(v.val.string.val, v.val.string.len);
+					elog(DEBUG1, "Label: %s = %s", key, val);
+					labels_map[key] = val;
+				}
+			}
+		}
+	}
+
+	pgotel::counter(counter_name, value, labels_map);
 
 	PG_RETURN_NULL();
 }
