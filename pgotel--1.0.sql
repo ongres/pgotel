@@ -5,7 +5,7 @@
 -- AS 'MODULE_PATHNAME'
 -- LANGUAGE C;
 
-CREATE FUNCTION pgotel_counter(endpoint TEXT, counter_name TEXT, value FLOAT8)
+CREATE FUNCTION pgotel_counter(counter_name TEXT, value FLOAT8)
 RETURNS text
 AS 'MODULE_PATHNAME'
 LANGUAGE C;
