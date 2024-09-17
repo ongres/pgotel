@@ -2,3 +2,5 @@
 *.o
 *.bc
 *.gc*
+/log/
+/tmp_check/

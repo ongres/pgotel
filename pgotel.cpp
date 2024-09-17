@@ -118,7 +118,7 @@ Datum
 pgotel_counter(PG_FUNCTION_ARGS)
 {
 	char *counter_name = PG_ARGISNULL(0) ? NULL : text_to_cstring(PG_GETARG_TEXT_PP(0));
-	float8 value = PG_ARGISNULL(0) ? -1 : PG_GETARG_FLOAT8(1);
+	float8 value = PG_ARGISNULL(1) ? -1 : PG_GETARG_FLOAT8(1);
 	Jsonb *labels = PG_ARGISNULL(2) ? NULL : PG_GETARG_JSONB_P(2);
 	std::map<std::string, std::string> labels_map;
 
@@ -130,6 +130,9 @@ pgotel_counter(PG_FUNCTION_ARGS)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("counter value cannot be negative")));
+
+	if (labels == NULL && PG_NARGS() == 3)
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("labels cannot be NULL")));
 
 	/* iterate over the labels JSONB to include key/values to the C++ map data structure */
 	if (labels != NULL)
@@ -153,6 +156,11 @@ pgotel_counter(PG_FUNCTION_ARGS)
 		}
 	}
 
+	elog(DEBUG1, "labels_map size: %d", (int) labels_map.size());
+	if (labels != NULL && (int) labels_map.size() == 0)
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("invalid labels JSONB")));
+
+	/* Send the counter to the OTEL-Collector */
 	pgotel::counter(counter_name, value, labels_map);
 
 	PG_RETURN_NULL();

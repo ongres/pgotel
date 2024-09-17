@@ -1,0 +1,19 @@
+CREATE EXTENSION pgotel;
+SELECT pgotel_counter('foo', -1);
+ERROR:  counter value cannot be negative
+SELECT pgotel_counter('foo', 0, '{}');
+ERROR:  invalid labels JSONB
+SELECT pgotel_counter('foo', 0, NULL);
+ERROR:  labels cannot be NULL
+SELECT pgotel_counter('foo', NULL);
+ERROR:  counter value cannot be negative
+SELECT pgotel_counter(NULL, 0);
+ERROR:  counter name cannot be NULL
+SELECT pgotel_counter(NULL, NULL);
+ERROR:  counter name cannot be NULL
+SELECT pgotel_counter('foo', 0, '{"dbname": "foo", "schemaname": "bar", "relname": "baz"}');
+ pgotel_counter 
+----------------
+ 
+(1 row)
+

@@ -2,6 +2,9 @@ MODULE_big = pgotel
 
 EXTENSION = pgotel
 
+REGRESS = pgotel
+REGRESS_OPTS = --temp-instance=tmp_check
+
 DATA = pgotel--1.0.sql
 OBJS = pgotel.o
 PGFILEDESC = "pgotel - POC to interact with OpenTelemetry"
