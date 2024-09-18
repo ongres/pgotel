@@ -6,7 +6,7 @@ REGRESS = pgotel
 REGRESS_OPTS = --temp-instance=tmp_check
 
 DATA = pgotel--1.0.sql
-OBJS = pgotel.o
+OBJS = metrics_grpc.o pgotel.o
 PGFILEDESC = "pgotel - POC to interact with OpenTelemetry"
 
 SHLIB_LINK := $(LDFLAGS) \
