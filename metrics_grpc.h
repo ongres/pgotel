@@ -11,6 +11,8 @@
  *-------------------------------------------------------------------------
  */
 
+#pragma once
+
 #include "opentelemetry/exporters/otlp/otlp_grpc_metric_exporter_factory.h"
 #include "opentelemetry/metrics/provider.h"
 #include "opentelemetry/sdk/metrics/export/periodic_exporting_metric_reader.h"

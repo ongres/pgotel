@@ -17,11 +17,17 @@ namespace pgotel
 {
 	otlp_exporter::OtlpGrpcMetricExporterOptions options;
 	std::unique_ptr<metric_sdk::MetricReader> reader;
+	bool initialized = false;
 
 	void
 	InitMetrics(std::string endpoint, std::chrono::milliseconds interval,
 				std::chrono::milliseconds timeout)
 	{
+		if (pgotel::initialized)
+		{
+			return;
+		}
+
 		pgotel::options.endpoint = endpoint;
 		auto exporter = otlp_exporter::OtlpGrpcMetricExporterFactory::Create(options);
 
@@ -43,13 +49,19 @@ namespace pgotel
 		std::shared_ptr<opentelemetry::metrics::MeterProvider> provider(std::move(u_provider));
 
 		metrics_api::Provider::SetMeterProvider(provider);
+
+		pgotel::initialized = true;
 	}
 
 	void
 	CleanupMetrics()
 	{
-		std::shared_ptr<metrics_api::MeterProvider> none;
-		metrics_api::Provider::SetMeterProvider(none);
+		if (pgotel::initialized)
+		{
+			std::shared_ptr<metrics_api::MeterProvider> none;
+			metrics_api::Provider::SetMeterProvider(none);
+			pgotel::initialized = false;
+		}
 	}
 
 	void
@@ -63,6 +75,10 @@ namespace pgotel
 	void
 	Counter(const std::string &name, double value, std::map<std::string, std::string> labels)
 	{
+		if (!initialized)
+		{
+			return;
+		}
 		std::string counter_name = "counter." + name;
 		auto provider = metrics_api::Provider::GetMeterProvider();
 		opentelemetry::nostd::shared_ptr<metrics_api::Meter> meter =
