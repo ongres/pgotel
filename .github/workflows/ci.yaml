@@ -1,0 +1,43 @@
+---
+name: Run extension Regression Tests
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+
+  opentelemetry-cpp:
+    name: OpenTelemetry C++ SDK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout gRPC C++ SDK
+        uses: actions/checkout@v4
+        with:
+          repository: grpc/grpc
+          ref: v1.62.0
+          path: grpc
+          fetch-depth: 2
+          submodules: 'recursive'
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install --no-install-recommends --no-install-suggests -y \
+            build-essential bison flex zlib1g-dev libreadline-dev
+
+      - name: Build gRPC C++ SDK
+        run: |
+          cd grpc
+          mkdir -p cmake/build
+          pushd cmake/build
+          cmake -DgRPC_INSTALL=ON \
+              -DgRPC_BUILD_TESTS=OFF \
+              -DCMAKE_INSTALL_PREFIX=/usr/local \
+              -DBUILD_SHARED_LIBS=ON \
+              -DCMAKE_CXX_STANDARD=17 \
+              -DABSL_PROPAGATE_CXX_STD=ON \
+              ../..
+          make -j
+          sudo make -j install
+          popd
+          sudo ldconfig
